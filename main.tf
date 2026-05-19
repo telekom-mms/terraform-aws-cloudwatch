@@ -2,13 +2,12 @@
 # Written by Marc Straubinger - Overhauled for Security-First Best Practices
 
 # SNS Topic for CloudWatch Alarms
-# PSA Compliance: Req 3.50-01 (Encryption)
 resource "aws_sns_topic" "cloudwatch_alarms" {
-  name              = "${var.name_prefix}-cloudwatch-alarms"
+  name              = "${local.name_prefix}-cloudwatch-alarms"
   kms_master_key_id = var.enable_sns_encryption ? var.sns_kms_key_id : null
 
-  tags = merge(var.tags, {
-    "Name"          = "${var.name_prefix}-cloudwatch-alarms"
+  tags = merge(local.common_tags, {
+    "Name"          = "${local.name_prefix}-cloudwatch-alarms"
     "PSA-Compliant" = "true"
   })
 }
@@ -66,10 +65,11 @@ resource "aws_sns_topic_subscription" "email" {
 }
 
 # CloudWatch Alarms for EC2 Instances
+# PSA Compliance: Req 8 (monitoring and alerting)
 resource "aws_cloudwatch_metric_alarm" "ec2_high_cpu" {
   for_each = toset(var.ec2_instance_ids)
 
-  alarm_name          = "${var.name_prefix}-ec2-${each.key}-high-cpu"
+  alarm_name          = "${local.name_prefix}-ec2-${each.key}-high-cpu"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = var.alarm_evaluation_periods
   datapoints_to_alarm = var.alarm_datapoints_to_alarm
@@ -87,47 +87,77 @@ resource "aws_cloudwatch_metric_alarm" "ec2_high_cpu" {
   insufficient_data_actions = [aws_sns_topic.cloudwatch_alarms.arn]
   ok_actions                = [aws_sns_topic.cloudwatch_alarms.arn]
 
-  tags = merge(var.tags, {
-    "Name"          = "${var.name_prefix}-ec2-${each.key}-high-cpu"
+  tags = merge(local.common_tags, {
+    "Name"          = "${local.name_prefix}-ec2-${each.key}-high-cpu"
+    "PSA-Compliant" = "true"
+  })
+}
+
+# PSA Compliance: Req 8 (monitoring and alerting)
+resource "aws_cloudwatch_metric_alarm" "ec2_low_cpu" {
+  for_each = toset(var.ec2_instance_ids)
+
+  alarm_name          = "${local.name_prefix}-ec2-${each.key}-low-cpu"
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = var.alarm_evaluation_periods
+  datapoints_to_alarm = var.alarm_datapoints_to_alarm
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = var.alarm_period
+  statistic           = "Average"
+  threshold           = var.ec2_low_cpu_threshold
+  alarm_description   = "EC2 instance ${each.key} low CPU utilization"
+  dimensions = {
+    InstanceId = each.key
+  }
+
+  alarm_actions             = [aws_sns_topic.cloudwatch_alarms.arn]
+  insufficient_data_actions = [aws_sns_topic.cloudwatch_alarms.arn]
+  ok_actions                = [aws_sns_topic.cloudwatch_alarms.arn]
+
+  tags = merge(local.common_tags, {
+    "Name"          = "${local.name_prefix}-ec2-${each.key}-low-cpu"
     "PSA-Compliant" = "true"
   })
 }
 
 # Custom Metric Alarms
+# PSA Compliance: Req 8 (monitoring and alerting)
 resource "aws_cloudwatch_metric_alarm" "custom" {
   for_each = var.custom_metrics
 
-  alarm_name          = "${var.name_prefix}-custom-${each.key}"
+  alarm_name          = "${local.name_prefix}-custom-${each.key}"
   comparison_operator = each.value.comparison_operator
   evaluation_periods  = each.value.evaluation_periods
+  datapoints_to_alarm = try(each.value.datapoints_to_alarm, var.alarm_datapoints_to_alarm)
   metric_name         = each.value.metric_name
   namespace           = each.value.namespace
   period              = each.value.period
   statistic           = each.value.statistic
   threshold           = each.value.threshold
-  alarm_description   = each.value.description
+  alarm_description   = each.value.description != "" ? each.value.description : "Custom alarm for ${each.key}"
   dimensions          = each.value.dimensions
 
   alarm_actions             = [aws_sns_topic.cloudwatch_alarms.arn]
   insufficient_data_actions = [aws_sns_topic.cloudwatch_alarms.arn]
   ok_actions                = [aws_sns_topic.cloudwatch_alarms.arn]
 
-  tags = merge(var.tags, {
-    "Name"          = "${var.name_prefix}-custom-${each.key}"
+  tags = merge(local.common_tags, {
+    "Name"          = "${local.name_prefix}-custom-${each.key}"
     "PSA-Compliant" = "true"
   })
 }
 
 # CloudWatch Logs Group
-# PSA Compliance: Req 3.66-05 (Logging obligatory with encryption)
+# PSA Compliance: Req 1 (audit logging)
 resource "aws_cloudwatch_log_group" "application_logs" {
   count             = var.enable_application_logs ? 1 : 0
-  name              = "/aws/app/${var.name_prefix}/logs"
+  name              = "/aws/app/${local.name_prefix}/logs"
   retention_in_days = var.log_retention_days
   kms_key_id        = var.log_group_kms_key_id
 
-  tags = merge(var.tags, {
-    "Name"          = "${var.name_prefix}-application-logs"
+  tags = merge(local.common_tags, {
+    "Name"          = "${local.name_prefix}-application-logs"
     "PSA-Compliant" = "true"
   })
 }

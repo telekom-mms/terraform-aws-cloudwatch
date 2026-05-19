@@ -11,8 +11,9 @@ variable "environment" {
 }
 
 variable "name_prefix" {
-  description = "Prefix for resource names (e.g., 'myapp-prod')"
+  description = "Prefix for resource names (if not provided, will use project-environment pattern)"
   type        = string
+  default     = ""
 }
 
 variable "tags" {
@@ -96,13 +97,14 @@ variable "custom_metrics" {
   type = map(object({
     metric_name         = string
     namespace           = string
-    statistic           = string
     threshold           = number
-    comparison_operator = string
-    evaluation_periods  = number
-    period              = number
-    description         = string
-    dimensions          = map(string)
+    statistic           = optional(string, "Average")
+    comparison_operator = optional(string, "GreaterThanThreshold")
+    evaluation_periods  = optional(number, 2)
+    datapoints_to_alarm = optional(number)
+    period              = optional(number, 300)
+    description         = optional(string, "")
+    dimensions          = optional(map(string), {})
   }))
   default = {}
 }
